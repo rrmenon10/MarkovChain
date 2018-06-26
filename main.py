@@ -26,6 +26,7 @@ def main():
 
 	args = parser.parse_args()
 	sess = tf.Session()
+	sess.__enter__()
 	env = mdp.MarkovChain(chain_length=args.chain_length)
 	agent = model.dqn(
 		input_size=env.chain_length,
@@ -34,8 +35,7 @@ def main():
 		activation_fn="relu",
 		norm="layer",
 		learning_rate=args.lr,
-		scope_name="dqn",
-		session=sess)
+		scope_name="dqn")
 	agent.mem = replay_memory.ReplayBuffer(max_samples=args.replay_size)
 
 	train(args, env, agent, scope="dqn")

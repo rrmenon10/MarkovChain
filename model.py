@@ -8,7 +8,7 @@ import pdb
 
 class dqn:
 
-    def __init__(self, input_size, output_size, hidden_layers, activation_fn, norm, learning_rate, scope_name, session):
+    def __init__(self, input_size, output_size, hidden_layers, activation_fn, norm, learning_rate, scope_name):
 
         self.epsilon = 1
         self._gamma = 0.999
@@ -21,7 +21,7 @@ class dqn:
         self.q_values = tf_utils.mlp(self.state, output_size, hidden_layers, activation_fn=activation_fn, norm=norm, scope_name=scope_name)
         self.target_q_values = tf_utils.mlp(self.next_state, output_size, hidden_layers, activation_fn=activation_fn, norm=norm, scope_name="target_"+scope_name)
         self._vars = tf_utils.trainable_vars(scope_name=scope_name)
-        self._sess = session
+        self._sess = tf.get_default_session()
         self.optim = self.optim_op(self.loss)
         self.mem = None
 
@@ -30,12 +30,12 @@ class dqn:
 
         #Target Q-evaluations
         target_q = self.target_q_values
+        action_space = target_q.shape[-1]
         target_q_best_actions = tf.reduce_max(target_q, axis=-1)
         target_q_best_masked = (1. - self.done)*target_q_best_actions
 
         #Current net Q-evaluations
         q_values = self.q_values
-        action_space = q_values.shape[-1]
         masked_actions = tf.one_hot(self.action, action_space)
         q_values_masked = tf.reduce_sum(q_values*masked_actions, axis=-1)
 
@@ -52,16 +52,22 @@ class dqn:
     def get_q(self, state):
         return self.sess.run(self.q_values, feed_dict={self.state : state})
     
-    def act(self, state):
+    def act(self, state, mode):
 
         q_values = self.get_q(state)
-        best_action = tf.argmax(q_values, axis=-1)
+        best_action = np.argmax(q_values, axis=-1)
         action_space = q_values.shape[-1]
-        if random.random()< self.epsilon:
-            action = random.randint(0, action_space-1)
-        else:
-            action = self.sess.run(best_action)
 
+        if mode=="train":
+            if random.random()< self.epsilon:
+                action = random.randint(0, action_space-1)
+            else:
+                action = best_action
+        elif mode=="test":
+            if self.epsilon> 0.00 and random.random()< 0.05:
+                action = random.randint(0, action_space-1)
+            else:
+                action = best_action
         return action
 
     @property

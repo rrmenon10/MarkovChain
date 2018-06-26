@@ -3,6 +3,7 @@ __author__ = 'Rakesh R Menon'
 import numpy as np
 import tensorflow as tf
 import tf_utils
+import random
 import os
 from tqdm import tqdm
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
@@ -29,7 +30,7 @@ def get_trainable_state(state, chain_length):
 def train(args, env, agent, scope="dqn"):
 
 	'''
-		Note : The BootstrappedDQN paper mentions that the algorithm runs for N+9 steps and that the task is considered solved if it gets a return of 10 in the episode.
+		Note : The BootstrappedDQN paper mentions that the algorithm runs for N+9 steps and that the task is considered solved if it gets a return of +10.0 in the episode.
 		To align with these conditions, we have used maximum number of steps as N+7, i.e., N-2 steps till the first reward of +1.0 and then 9 steps more.
 
 		Function : Train the agent on the Markov Chain environment.
@@ -43,11 +44,12 @@ def train(args, env, agent, scope="dqn"):
 
 	'''
 
-	agent.sess.run(tf.global_variables_initializer())
+	sess = tf.get_default_session()
+	sess.run(tf.global_variables_initializer())
 
 	#Retrieving operations required for updating target network
 	update_target_ops = tf_utils.update_vars_op(scope_from=scope, scope_to="target_"+scope)
-	agent.sess.run(update_target_ops)
+	sess.run(update_target_ops)
 
 	#Epsilon annealing
 	agent.epsilon = args.start_epsilon
@@ -67,7 +69,7 @@ def train(args, env, agent, scope="dqn"):
 			while not done:
 
 				state = get_trainable_state(state, args.chain_length)
-				action = agent.act(state)
+				action = agent.act(state, mode="test")
 				next_state, reward = env.step(action)
 
 				num_steps += 1
@@ -75,23 +77,21 @@ def train(args, env, agent, scope="dqn"):
 				done = False if num_steps < (args.chain_length + 7) else True
 				state = next_state
 
-			tqdm.write('%f'%(returns))
 			#Counting number of successive times in which the task was solved.
 			if int(returns)==10:
-				tqdm.write('Solved episode %d!'%(solved+1))
 				solved += 1
 			else:
 				solved = 0
 
 			if solved==100:
-				print('Solved! Number of Episodes taken= %d'%((num_episodes-1)/2-100))
+				print('%d'%((num_episodes-1)/2-100)) # As per the BootstrappedDQN paper, the task is considered solved if 100 consecutive episodes give the optimal return of +10.
 				break
 		else:
 			#Training
 			while not done:
 
 				state = get_trainable_state(state, args.chain_length)
-				action = agent.act(state)
+				action = agent.act(state, mode="train")
 				next_state, reward = env.step(action)
 
 				num_steps += 1
@@ -104,7 +104,7 @@ def train(args, env, agent, scope="dqn"):
 
 				#Update target network. Note : tot_steps used here instead of num_steps
 				if (tot_steps+1)%args.update_target==0:
-					agent.sess.run(update_target_ops)
+					sess.run(update_target_ops)
 
 				#Perform learning after args.start_learn number of episodes
 				if num_episodes/2 < args.start_learn:
@@ -116,4 +116,4 @@ def train(args, env, agent, scope="dqn"):
 			agent.epsilon -= eps_diff
 
 	if num_episodes==args.num_episodes and solved!=100:
-		print('Unsolved!')
+		print('%d'%(args.num_episodes))
